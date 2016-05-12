@@ -167,7 +167,6 @@ namespace MyProject1
         {
             RhinoView p = doc.Views.Find("Perspective", false);
             pt0 = p.ActiveViewport.CameraLocation;
-            doc.PageUnitSystem = UnitSystem.Millimeters;
             string targetLeftName = "LeftEye";
             string targetRightName = "RightEye";
             int targetWidth = 400;
@@ -190,9 +189,27 @@ namespace MyProject1
             rhViewRightPort.DisplayMode = DisplayModeDescription.FindByName("Shaded");
             rhViewLeftInfo = new ViewportInfo(rhViewLeftPort);
             rhViewRightInfo = new ViewportInfo(rhViewRightPort);
-            float IPD = 64.0f / 2.0f;
-            cam_left_pos  = new Point3f(-IPD + (float)pt0.X, (float)pt0.Y, 1700.0f);
-            cam_right_pos = new Point3f(+IPD + (float)pt0.X, (float)pt0.Y, 1700.0f);
+            string unit = doc.GetUnitSystemName(true, true, true, true);
+            RhinoApp.WriteLine(unit);
+            float scale = 1.0f;
+            switch (unit)
+            {
+                case "m":
+                    scale = 1000.0f;
+                    break;
+                case "cm":
+                    scale = 10.0f;
+                    break;
+                case "mm":
+                    scale = 1.0f;
+                    break;
+                default:
+                    break;
+            }
+            float IPD = 64.0f / (scale * 2.0f);
+            float height = 1700.0f / scale;
+            cam_left_pos  = new Point3f(-IPD + (float)pt0.X, (float)pt0.Y, height);
+            cam_right_pos = new Point3f(+IPD + (float)pt0.X, (float)pt0.Y, height);
 
             RhinoApp.WriteLine("Starting Treads");
             sendThread = new Thread(new ParameterizedThreadStart(send_thread));
