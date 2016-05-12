@@ -1,20 +1,23 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using UnityEngine.VR;
+//using UnityEngine.VR;
 
 public class TCPserver : MonoBehaviour
 {
-    private GameObject LeftEye;
-    private GameObject RightEye;
+    public GameObject title;
+    public GameObject status;
+    public GameObject LeftEye;
+    public GameObject RightEye;
+
     private Texture2D l_tex;
     private Texture2D r_tex;
 
-    Thread readThread;
-    TcpListener server;
-    TcpClient client;
+    private Thread readThread;
+    private TcpListener server;
+    private TcpClient client;
 
     struct eye_buffer
     {
@@ -28,11 +31,10 @@ public class TCPserver : MonoBehaviour
     private Vector3 dir;
     private Vector3 up;
 
-    private bool stop_thread = false;
+    private bool connected = false;
 
     void start_read_thread()
     {
-        if (readThread != null && readThread.IsAlive) return;
         Debug.Log("Starting Read Thread.");
         readThread = new Thread(new ThreadStart(ReceiveData));
         readThread.IsBackground = true;
@@ -40,21 +42,32 @@ public class TCPserver : MonoBehaviour
         Debug.Log("Read Thread Started");
     }
 
+    void close_read_thread()
+    {
+        if (readThread != null && readThread.IsAlive)
+        {
+            if (client != null) client.Close();
+            if (server != null) server.Stop();
+            readThread.Abort();
+        }
+        connected = false;
+        Debug.Log("Thread closed");
+    }
+
     void restart_read_thread()
     {
-        if (readThread.IsAlive) stop_thread = true;
-        while (readThread.IsAlive) continue;
+        close_read_thread();
         start_read_thread();
     }
 
     void Start()
     {
         //InputTracking.Recenter();
-        dir =  Camera.main.transform.forward;
-        up =   Camera.main.transform.up;
+        dir = Camera.main.transform.forward;
+        up  = Camera.main.transform.up;
+        LeftEye.SetActive(false);
+        RightEye.SetActive(false);
 
-        LeftEye = GameObject.Find("LeftEye");
-        RightEye = GameObject.Find("RightEye");
         l_tex = new Texture2D(2, 2);
         r_tex = new Texture2D(2, 2);
 
@@ -68,17 +81,29 @@ public class TCPserver : MonoBehaviour
 
     }
 
-   
-
     void Update()
     {
-        dir =  Camera.main.transform.forward;
-        up =   Camera.main.transform.up;
+        dir = Camera.main.transform.forward;
+        up  = Camera.main.transform.up;
+        
+        if (connected) {
+            title.SetActive(false);
+            status.SetActive(false);
+            LeftEye.SetActive(true);
+            RightEye.SetActive(true);
+        } else {
+            title.SetActive(true);
+            status.SetActive(true);
+            LeftEye.SetActive(false);
+            RightEye.SetActive(false);
+        }
+        
         //Debug.DrawLine(Vector3.zero, dir * 4, Color.blue);
         //Debug.DrawLine(Vector3.zero, up * 4, Color.red);
         if (Input.GetMouseButtonDown(0)) restart_read_thread();
 
-        if (left_buff.buffer == null || right_buff.buffer == null) { return; }
+        if (left_buff.buffer == null || right_buff.buffer == null)  return; 
+
 
         // Only apply the texture when the last byte is the same as received       
         if (left_buff.buffer[left_buff.buffer.Length - 1] == left_buff.last[0])
@@ -94,7 +119,7 @@ public class TCPserver : MonoBehaviour
         }
     }
 
-    private void read_buffer(NetworkStream stream)
+    void read_buffer( NetworkStream stream )
     {
         // Read left size	
         int nread = stream.Read(sizeBuffer, 0, 4);
@@ -127,7 +152,7 @@ public class TCPserver : MonoBehaviour
         //Debug.Log("Read " + nread + " bytes for right eye.");
     }
 
-    private void ReceiveData()
+    void ReceiveData()
     {
         try
         {
@@ -138,8 +163,9 @@ public class TCPserver : MonoBehaviour
             Debug.Log("Waiting for a connection... ");
             client = server.AcceptTcpClient();
             Debug.Log("Connected!");
+            connected = true;
             NetworkStream stream = client.GetStream();
-            while (!stop_thread)
+            while (true)
             {
                 read_buffer(stream);
                 Vector3 temp_dir = dir;
@@ -155,32 +181,17 @@ public class TCPserver : MonoBehaviour
                     stream.Write(temp, 0, 4);
                 }
             }
-
-            // Stop Thread
-            if (client != null) client.Close();
-            server.Stop();
-            stop_thread = false;
-            Debug.Log("Thread closed");
-
         }
         catch (SocketException e)
         {
             Debug.Log("SocketException:" + e);
-            if (client != null) client.Close();
-            server.Stop();
-            stop_thread = false;
-            Debug.Log("Thread closed");
+            close_read_thread();
         }
     }
 
     void OnDestroy()
     {
-        if (readThread != null && readThread.IsAlive)
-        {
-            client.Close();
-            server.Stop();
-            readThread.Abort();
-            Debug.Log("All Stop.");
-        }
+        close_read_thread();
+        Debug.Log("All stoped");
     }
 }
